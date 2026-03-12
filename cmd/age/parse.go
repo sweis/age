@@ -124,7 +124,7 @@ func sshKeyType(s string) (string, bool) {
 	k := cryptobyte.String(key)
 	var typeLen uint32
 	var typeBytes []byte
-	if !k.ReadUint32(&typeLen) || !k.ReadBytes(&typeBytes, int(typeLen)) {
+	if !k.ReadUint32(&typeLen) || uint64(typeLen) > uint64(len(k)) || !k.ReadBytes(&typeBytes, int(typeLen)) {
 		return "", false
 	}
 	if t := fields[0]; t == string(typeBytes) {
