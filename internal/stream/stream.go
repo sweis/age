@@ -20,6 +20,9 @@ import (
 const ChunkSize = 64 * 1024
 
 func EncryptedChunkCount(encryptedSize int64) (int64, error) {
+	if encryptedSize < chacha20poly1305.Overhead {
+		return 0, fmt.Errorf("invalid encrypted payload size: %d", encryptedSize)
+	}
 	chunks := (encryptedSize + encChunkSize - 1) / encChunkSize
 
 	plaintextSize := encryptedSize - chunks*chacha20poly1305.Overhead
