@@ -905,6 +905,24 @@ func TestDecryptReaderAtConcurrent(t *testing.T) {
 	})
 }
 
+func TestEncryptedChunkCountRejectsSmallSizes(t *testing.T) {
+	// A valid encrypted payload must carry at least one Poly1305 tag
+	// (chacha20poly1305.Overhead = 16 bytes). Before the fix, sizes below
+	// this threshold silently returned (0, nil) instead of an error.
+	for _, size := range []int64{-1, 0, chacha20poly1305.Overhead - 1} {
+		if n, err := stream.EncryptedChunkCount(size); err == nil {
+			t.Errorf("EncryptedChunkCount(%d) = (%d, nil), want error", size, n)
+		}
+	}
+
+	// Exactly one tag: the empty-plaintext single chunk case.
+	if n, err := stream.EncryptedChunkCount(chacha20poly1305.Overhead); err != nil {
+		t.Errorf("EncryptedChunkCount(%d) returned unexpected error: %v", chacha20poly1305.Overhead, err)
+	} else if n != 1 {
+		t.Errorf("EncryptedChunkCount(%d) = %d, want 1", chacha20poly1305.Overhead, n)
+	}
+}
+
 func TestDecryptReaderAtCorrupted(t *testing.T) {
 	key := make([]byte, chacha20poly1305.KeySize)
 	if _, err := rand.Read(key); err != nil {
