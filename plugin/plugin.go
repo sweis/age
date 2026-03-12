@@ -161,7 +161,7 @@ func (p *Plugin) Main() int {
 	if *p.sm == "identity-v1" {
 		return p.IdentityV1()
 	}
-	fmt.Fprintf(p.stderr, "unknown state machine %q", *p.sm)
+	fmt.Fprintf(p.stderr, "unknown state machine %q\n", *p.sm)
 	return 4
 }
 
@@ -529,8 +529,8 @@ func (p *Plugin) RequestValue(prompt string, secret bool) (string, error) {
 	if s.Type == "fail" {
 		return "", fmt.Errorf("client failed to request value")
 	}
-	if err := expectStanzaWithBody(s, 0); err != nil {
-		return "", p.fatalInteractf("%v", err)
+	if len(s.Args) != 0 {
+		return "", p.fatalInteractf("ok stanza has %d arguments, want 0", len(s.Args))
 	}
 	return string(s.Body), nil
 }
@@ -568,12 +568,12 @@ func (p *Plugin) Confirm(prompt, yes, no string) (choseYes bool, err error) {
 // Wrap/Unwrap caller can exit with an error.
 func (p *Plugin) fatalInteractf(format string, args ...any) error {
 	p.broken = true
-	fmt.Fprintf(p.stderr, format, args...)
+	fmt.Fprintf(p.stderr, format+"\n", args...)
 	return fmt.Errorf(format, args...)
 }
 
 func (p *Plugin) fatalf(format string, args ...any) int {
-	fmt.Fprintf(p.stderr, format, args...)
+	fmt.Fprintf(p.stderr, format+"\n", args...)
 	return 1
 }
 

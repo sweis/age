@@ -152,7 +152,7 @@ func (i *HybridIdentity) unwrap(block *Stanza) ([]byte, error) {
 		return nil, fmt.Errorf("failed to parse mlkem768x25519 recipient: %v", err)
 	}
 	if len(block.Body) != fileKeySize+chacha20poly1305.Overhead {
-		return nil, errIncorrectCiphertextSize
+		return nil, errors.New("invalid mlkem768x25519 recipient block: incorrect file key size")
 	}
 
 	r, err := hpke.NewRecipient(enc, i.k, hpke.HKDFSHA256(), hpke.ChaCha20Poly1305(), []byte(pqLabel))
