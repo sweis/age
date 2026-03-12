@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"filippo.io/age/internal/format"
@@ -40,6 +41,42 @@ func TestStanzaMarshal(t *testing.T) {
 	s.Marshal(buf)
 	if exp := "-> test 1 2 3\nQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\n\n"; buf.String() != exp {
 		t.Errorf("wrong 64 columns stanza encoding: expected %q, got %q", exp, buf.String())
+	}
+}
+
+// stanzaBodyReader emits an unbounded sequence of valid 64-column stanza
+// body lines, so Parse sees a syntactically valid but never-ending stanza.
+type stanzaBodyReader struct {
+	line []byte
+	off  int
+}
+
+func (r *stanzaBodyReader) Read(p []byte) (int, error) {
+	n := 0
+	for n < len(p) {
+		c := copy(p[n:], r.line[r.off:])
+		n += c
+		r.off = (r.off + c) % len(r.line)
+	}
+	return n, nil
+}
+
+func TestParseHeaderSizeLimit(t *testing.T) {
+	// A body line of exactly ColumnsPerLine base64 chars keeps the stanza
+	// open, so the reader below never yields a short line and Parse would
+	// read forever without the header size cap.
+	line := strings.Repeat("A", format.ColumnsPerLine) + "\n"
+	r := io.MultiReader(
+		strings.NewReader("age-encryption.org/v1\n-> X\n"),
+		&stanzaBodyReader{line: []byte(line)},
+	)
+
+	_, _, err := format.Parse(r)
+	if err == nil {
+		t.Fatal("Parse of >16 MiB header succeeded; want error")
+	}
+	if !strings.Contains(err.Error(), "header exceeds") {
+		t.Fatalf("Parse error = %q; want error mentioning %q", err, "header exceeds")
 	}
 }
 

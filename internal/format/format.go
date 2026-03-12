@@ -229,11 +229,31 @@ func errorf(format string, a ...any) error {
 	return &ParseError{fmt.Errorf(format, a...)}
 }
 
+// maxHeaderSize bounds the number of bytes Parse will consume while reading
+// the header, to protect automated decryption of untrusted files against
+// memory-exhaustion attacks via unbounded stanzas or lines.
+const maxHeaderSize = 1 << 24 // 16 MiB
+
+type headerLimitedReader struct {
+	r    io.Reader
+	read int64
+}
+
+func (r *headerLimitedReader) Read(p []byte) (int, error) {
+	if r.read >= maxHeaderSize {
+		return 0, errorf("header exceeds %d bytes", maxHeaderSize)
+	}
+	n, err := r.r.Read(p)
+	r.read += int64(n)
+	return n, err
+}
+
 // Parse returns the header and a Reader that begins at the start of the
 // payload.
 func Parse(input io.Reader) (*Header, io.Reader, error) {
 	h := &Header{}
-	rr := bufio.NewReader(input)
+	lr := &headerLimitedReader{r: input}
+	rr := bufio.NewReader(lr)
 
 	line, err := rr.ReadString('\n')
 	if err == io.EOF {
@@ -276,13 +296,7 @@ func Parse(input io.Reader) (*Header, io.Reader, error) {
 		h.Recipients = append(h.Recipients, s)
 	}
 
-	// If input is a bufio.Reader, rr might be equal to input because
-	// bufio.NewReader short-circuits. In this case we can just return it (and
-	// we would end up reading the buffer twice if we prepended the peek below).
-	if rr == input {
-		return h, rr, nil
-	}
-	// Otherwise, unwind the bufio overread and return the unbuffered input.
+	// Unwind the bufio overread and return the unbuffered input.
 	buf, err := rr.Peek(rr.Buffered())
 	if err != nil {
 		return nil, nil, errorf("internal error: %v", err)
