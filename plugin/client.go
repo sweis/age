@@ -474,9 +474,13 @@ func openClientConnection(name, protocol string) (*clientConnection, error) {
 
 func (cc *clientConnection) Close() error {
 	// Close stdin and stdout and send SIGINT (if supported) to the plugin,
-	// then wait for it to cleanup and exit.
+	// then wait for it to cleanup and exit. os.Interrupt is a no-op on
+	// Windows, so also kill after a grace period to avoid hanging if the
+	// plugin doesn't exit on stdin close.
 	cc.close()
 	cc.cmd.Process.Signal(os.Interrupt)
+	timer := time.AfterFunc(5*time.Second, func() { cc.cmd.Process.Kill() })
+	defer timer.Stop()
 	return cc.cmd.Wait()
 }
 
